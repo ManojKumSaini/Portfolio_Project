@@ -1,0 +1,219 @@
+-- 1) Exploratory Data Analysis
+-- Column Data Type
+Select Column_name, Data_Type
+From Information_Schema.columns
+Where Table_Name = 'Markets'
+
+-- Number of Rows and Columns
+Select Count(*) as Total_Row
+From Markets
+
+Select Count(*) as Total_Column
+From Information_Schema.columns
+Where Table_Name = 'Markets'
+
+-- Basic Statstics
+Select 
+Distinct([Product line]) as Type_of_Products,
+Round(AVG([Unit price]),2) as Avg_unit_price,
+MAX([Unit price]) as Max_unit_price,
+Min([Unit price]) as Min_unit_price,
+Sum(Quantity) as Unit_sold,
+Round(SUM(Total),2) as Sales,
+round(Sum([Tax 5%]),2) as Tax_Collected,
+Round(AVG([gross margin percentage]),2) as Profit_Margin
+From Markets
+Group by [Product line]
+Order by 6 desc
+
+-- Distribution of sales across different branches, cities, customer types, and genders
+Select Branch,
+City,
+[Customer type],
+Gender,
+Round(Sum(Total),2) as Sales
+From Markets
+Group by Branch,
+City,
+[Customer type],
+Gender
+Order by 5 desc
+
+-- Identification of top-selling products
+Select [Product line],
+COUNT([Product line]) as Frequent_Sold,
+Round(AVG(Rating),2) as Avg_Rating
+From Markets
+Group by [Product line]
+Order by 2 desc
+
+-- 2) Time based Analysis
+--Sales Trend (Sales ordered in every Month with Bar Chart)
+SELECT CONVERT(VARCHAR(7), Date, 120) AS YearMonth,
+Round(SUM(Total),2) AS TotalSales,
+REPLICATE('|',(SUM(Total)/1000)) as Trend
+FROM Markets
+GROUP BY CONVERT(VARCHAR(7), Date, 120)
+ORDER BY YearMonth;
+
+-- Busiest Days (Busiest days from last 3 months profit)
+select Rank() over (Order by Sum(Total) desc) as Ranks,
+Datename(WEEKDAY,Date) as Weekday,
+Round(Sum(Total),2) as Sales
+From Markets
+Group by Datename(WEEKDAY,Date)
+
+-- Most Profitable Month (Sales percentage by Month order in Desc order)
+Select Rank() over (Order by Sum(Total) desc) as Ranks,
+DATENAME(Month,Date) as Months,
+(Round(Sum(Total)/(Select SUM(Total) From Markets)*100,0)) as Sales_Perecnt,
+Replicate('||',(sum(Total)/10000)) as Trend
+From Markets
+Group by DATENAME(Month,Date)
+
+-- Does PL's have any seasonal trend? (Discoverig any seasonal trend for PL)
+Select [Product line],
+Datename(Month,Date) as Months,
+Sum(Total) as Sales,
+(Round((Sum(Total))/AVG(SUM(Total)) OVER (PARTITION BY [Product line]),2)) as Seasonal_Index
+From Markets
+Group by [Product line],
+Datename(Month,Date)
+
+-- 3) Customer Reviews Analysis
+-- Pattern by date
+Select DATENAME(MONTH,Date) as YearMonth,
+AVG(Rating) as AVG_Rating
+From Markets
+Group by DATENAME(MONTH,Date)
+Order by YearMonth
+
+-- Review Counts as per Review Classification Rating <=4 is Not Satisfied, Rating <7 is Good, Rating < 9 is Great and Rating >9 is Excellent
+Select
+      Case
+      When Rating <= 4 Then 'Not Satisfied'
+      When Rating < 7 Then 'Good'
+      When Rating < 9 Then 'Great'
+      Else 'Excellent'
+      end as Ratings_Classification,
+      Count(*) as Count
+From Markets
+Group by Case
+         When Rating <= 4 Then 'Not Satisfied'
+         When Rating < 7 Then 'Good'
+         When Rating < 9 Then 'Great'
+         Else 'Excellent'
+end
+
+-- Classification as per Gender in Customer Type
+Select [Customer type],
+Gender,
+Round(avg(Rating),2) as Avg_Ratings
+From Markets
+group by [Customer type],
+Gender
+Order by 3 desc
+
+-- Relation with the Sales (No sales is less tha 20)
+SELECT CASE 
+WHEN Total >= 10 AND Total < 20 THEN '10-20'
+WHEN Total >= 20 AND Total < 30 THEN '20-30'
+      WHEN Total >= 30 AND Total < 40 THEN '30-40'
+      WHEN Total >= 40 AND Total < 50 THEN '40-50'
+      WHEN Total >= 50 AND Total < 60 THEN '50-60'
+      WHEN Total >= 60 AND Total < 70 THEN '60-70'
+      WHEN Total >= 70 AND Total < 80 THEN '70-80'
+      WHEN Total >= 80 AND Total < 90 THEN '80-90'
+      WHEN Total >= 90 AND Total < 100 THEN '90-100'
+      WHEN Total >= 100 THEN '100+'
+      END AS Sales_Range,
+      Round(AVG(Rating),2) AS Avg_Rating
+FROM Markets
+GROUP BY CASE 
+      WHEN Total >= 10 AND Total < 20 THEN '10-20'
+      WHEN Total >= 20 AND Total < 30 THEN '20-30'
+      WHEN Total >= 30 AND Total < 40 THEN '30-40'
+      WHEN Total >= 40 AND Total < 50 THEN '40-50'
+      WHEN Total >= 50 AND Total < 60 THEN '50-60'
+      WHEN Total >= 60 AND Total < 70 THEN '60-70'
+      WHEN Total >= 70 AND Total < 80 THEN '70-80'
+      WHEN Total >= 80 AND Total < 90 THEN '80-90'
+      WHEN Total >= 90 AND Total < 100 THEN '90-100'
+      WHEN Total >= 100 THEN '100+' end
+
+-- Rating as per Payment Method
+Select Payment
+,Cast(Avg(Rating) as int) as Avg_Rating
+From Markets
+Group by Payment
+
+-- Ratings by City and Branch
+Select City,
+       Branch
+       ,Cast(Avg(Rating) as int) as Avg_Rating
+From Markets
+Group by City,
+         Branch
+
+--4) Pricing and Profitability
+-- Avg Priccing and profit by Branch
+Select Branch
+      ,Avg([Unit price]) as Unit_Price
+	  ,Avg([Tax 5%]) as Tax
+	  ,avg(total) as Sales
+From Markets
+Group by Branch
+
+-- Sales per unit by PL's
+Select [Product line]
+       ,SUM(Quantity) as Units_Sold
+	   ,Cast(SUM(Total) as Int) as Sales
+	   ,Cast((SUM(Total)/SUM(Quantity)) as numeric) as Sales_Per_Unit
+	   ,Concat(Round((Sum(Total)/(Select Sum(Total) From Markets)*100),2),'%') as Sales_Share_Across_PL
+From Markets
+Group by [Product line]
+Order by Sales_Per_Unit desc
+
+-- Average Profit and Price by Product Line
+Select [Product line]
+,Avg([gross income]) as Avg_Profit
+,AVG([Unit price]) as Avg_Price
+,Sum([gross income]) as Total_Profit
+From Markets
+Group by [Product line]
+Order by 2 desc
+
+--5) Payment Analysis
+-- Most common payment methods used by customers
+SELECT Payment,
+    SUM(CASE WHEN DATEPART(MONTH, Date) = 1 THEN 1 ELSE 0 END) AS January,
+    SUM(CASE WHEN DATEPART(MONTH, Date) = 2 THEN 1 ELSE 0 END) AS February,
+    SUM(CASE WHEN DATEPART(MONTH, Date) = 3 THEN 1 ELSE 0 END) AS March
+FROM Markets
+GROUP BY Payment
+
+-- Identify if certain payment methods are associated with higher sales or customer satisfaction.
+WITH Payment_Dis AS (
+    SELECT Payment,
+           CASE
+               WHEN DATEPART(MONTH, Date) = 1 THEN 'January'
+               WHEN DATEPART(MONTH, Date) = 2 THEN 'February'
+               ELSE 'March'
+           END AS Month,
+           CAST(SUM(Total) AS INT) AS Sales,
+           ROUND(AVG(Rating), 2) AS Avg_ratings
+    FROM Markets
+    GROUP BY Payment, DATEPART(Month, Date)
+)
+SELECT *
+FROM Payment_Dis
+
+-- 6) Branch and City Analysis
+-- Analyze if the customer type or product line preferences differ significantly between branches or cities.
+Select [Product line],
+Branch,
+Count(*) as Num_of_transcation
+From Markets
+Group by [Product line],
+Branch
+order by 1 asc
