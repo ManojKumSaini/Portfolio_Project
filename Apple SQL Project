@@ -1,0 +1,282 @@
+-- 1) Exploratory  Data Analysis
+Select COLUMN_NAME, DATA_TYPE
+From INFORMATION_SCHEMA.COLUMNS
+Where TABLE_NAME = 'Apple'
+
+Select COUNT(*) as Total_Columns
+From INFORMATION_SCHEMA.COLUMNS
+Where TABLE_NAME = 'Apple'
+
+Select COUNT(*) as Total_Rows
+From Apple
+
+-- Checking Null Values in Database
+Select
+Count(Case when OrderID is null then 1 end) as OrderID_Null_Values,
+Count(Case when Date is null then 1 end)as Date_Null_Values,
+Count(Case when CustomerName is null then 1 end) as CustomerName_Null_Values,
+Count(Case when CustomerAge is null then 1 end) as  CustomerAge_Null_Values,
+Count(Case when Product is null then 1 end) as Product_Null_Values,
+Count(Case when Quantity is null then 1 end) as Quantity_Null_Values,
+Count(Case when UnitPrice is null then 1 end) as UnitPrice_Null_Values,
+Count(Case when TotalPrice is null then 1 end) as TotalPrice_Null_Values
+From Apple
+
+Select *
+From Apple
+Where Date is Null
+
+Update Apple
+Set Date = '2023-08-26'
+Where OrderID = 1057
+
+-- Changing DataTypes
+Alter Table Apple
+Alter Column Date Date
+Alter Column CustomerAge Float,
+Alter Column Quantity Float;
+
+-- Product Performance Analysis
+Select Product as Product
+,Sum(TotalPrice) as Revenue
+,Concat(Round((Sum(TotalPrice)/(Select Sum(TotalPrice) from Apple) * 100),2),'%') as 'Sales %'
+From Apple
+Group by Product
+Order by Revenue desc
+
+Select Product as Product
+,SUM(Quantity) as Units_Sold
+,Concat(Round((SUM(Quantity)/(Select SUM(Quantity) From Apple) * 100),2),'%') as'Sales %'
+From Apple
+Group by Product
+Order by Units_Sold desc
+
+With AvgAge as
+(Select Product
+, Case 
+      when CustomerAge between 20 and 25 then '20-25'
+	  when CustomerAge between 25 and 30 then '25-30'
+	  when CustomerAge between 30 and 35 then '30-35'
+	  when CustomerAge between 35 and 40 then '35-40'
+	  else '40+'
+  end as AgeGroup
+From Apple
+)
+,AgeGroupCounts as (
+Select Product,
+AgeGroup,
+Count(AgeGroup) as Counts,
+RANK() over (Partition by Product Order by Count(AgeGroup) Desc) as rank
+From AvgAge
+Group by Product,
+AgeGroup)
+
+Select Product,
+AgeGroup
+From AgeGroupCounts
+Where Rank = 1
+
+-- categorize the products
+Create View [ProductCategory] as (
+SELECT
+Product,
+CASE
+WHEN Product IN ('iPhone 12 Pro', 'iPhone 13') THEN 'Smartphone'
+WHEN Product IN ('MacBook Air', 'MacBook Pro') THEN 'Laptop'
+WHEN Product IN ('Apple Watch Series 7', 'Apple Watch SE') THEN 'Smartwatch'
+WHEN Product IN ('iPad Pro', 'iPad Air') THEN 'Tablet'
+WHEN Product IN ('AirPods Pro', 'AirPods 3') THEN 'Audio Accessories'
+WHEN Product IN ('iMac', 'iMac Pro') THEN 'Desktop Computer'
+WHEN Product IN ('Apple Pencil', 'Apple Pencil 2') THEN 'Accessories'
+WHEN Product IN ('HomePod Mini', 'HomePod') THEN 'Smart Speaker'
+WHEN Product IN ('Apple TV 4K', 'Apple TV HD') THEN 'Media Streaming'
+ELSE 'Other'
+    END AS Category
+FROM Apple)
+
+-- Customer Age Analysis
+With CustomerAgeSale as (
+Select Case 
+      when CustomerAge between 20 and 25 then '20-25'
+	  when CustomerAge between 25 and 30 then '25-30'
+	  when CustomerAge between 30 and 35 then '30-35'
+	  when CustomerAge between 35 and 40 then '35-40'
+	  else '40+'
+  end as AgeGroup,
+  TotalPrice,
+  Quantity
+  From Apple)
+  , CustomerGrpAgeSale as (
+  Select AgeGroup,
+  Sum(TotalPrice) as Revenue,
+  Sum(Quantity) as Units_Puchased
+  From CustomerAgeSale
+  Group by AgeGroup)
+
+Select AgeGroup,
+Units_Puchased,
+Revenue,
+Round((Revenue/Units_Puchased),2) as Per_Unit_Sales
+From CustomerGrpAgeSale
+
+With AgeVary as (
+Select Product, Case 
+      when CustomerAge between 20 and 25 then '20-25'
+	  when CustomerAge between 25 and 30 then '25-30'
+	  when CustomerAge between 30 and 35 then '30-35'
+	  when CustomerAge between 35 and 40 then '35-40'
+	  else '40+'
+	  end as Age_Distribution
+From Apple)
+
+Select Age_Distribution
+, Count(*) as [Age Distribution Count]
+, Concat(REPLICATE('|', (Cast(Count(*) as float)/(Select Count(CustomerAge) From Apple))*100), '  ',
+(Cast(Count(*) as float)/(Select Count(CustomerAge) From Apple))*100, '%') as [Market %]
+From AgeVary 
+Group by Age_Distribution
+
+-- Sales Trend Analysis
+Select Convert(varchar(7),Date,120) as YearMonth,
+Datename(Month,Date) as Month
+,Sum(TotalPrice) as Sales
+,Concat(Round(Isnull(((Sum(TotalPrice) - LAG(Sum(TotalPrice)) over (order by Convert(varchar(7),Date,120)))/
+Lag(Sum(TotalPrice)) over (order by Convert(varchar(7),Date,120)))*100,0),2), '%') as [% Difference]
+From Apple
+Group by Convert(varchar(7),Date,120),
+Datename(Month,Date)
+
+-- Insights: Our Sales is wobbling throughout the end of the year, however we got a huge up in the last month of the year but in the beginning of the 2024 we saw another dip.
+
+Select Datename(WEEKDAY,Date) as Weekdays
+, Sum(TotalPrice) as Sales
+, Round((Sum(TotalPrice)/(Select Sum(TotalPrice) From Apple) * 100), 2) as [Sales % by days]
+From Apple
+Group by Datename(WEEKDAY,Date)
+Order by 2 desc
+
+-- Customer Repeat Rate Analysis
+Select CustomerName
+,Count(CustomerName) as [No. of transcations]
+,Sum(TotalPrice) as Sales
+,Concat(Round((SUM(TotalPrice)/(Select SUM(TotalPrice) From Apple) * 100),2),'%') as [Contribution in sales]
+, STRING_AGG(Product, ',') as [Products Purchased]
+, Count(Product) as [No. of Products Purchased]
+From Apple
+Group by CustomerName
+Order by 2 desc
+
+-- Product Price Distribution
+Select Product,
+Max(TotalPrice) as [Max Price],
+Min(TotalPrice) as [Min Price],
+AVG(TotalPrice) as [Average Price],
+PERCENTILE_CONT(0.5) within group (Order by TotalPrice) over (Partition by Product) as Median
+From Apple
+Group by Product,
+TotalPrice
+
+-- Impact of Price and Sales
+With PriceStats as (
+Select Product,
+TotalPrice
+,PERCENTILE_CONT(0.25) within group (Order by TotalPrice) over (Partition by Product) as Q1
+,PERCENTILE_CONT(0.5) within group (Order by TotalPrice) over (Partition by Product) as Median
+From Apple),
+ProductCategory as (Select Product
+, Case When TotalPrice < Q1 Then 'Low'
+When TotalPrice >= Q1 and TotalPrice <= Median then 'Medium'
+Else 'High'
+End as Category
+From PriceStats)
+
+Select A.Product,
+PC.Category,
+Case when (Sum(A.Quantity) < (PERCENTILE_CONT(0.25) within group (Order by A.Quantity) over (Partition by A.Product))) Then 'Low'
+     when (Sum(A.Quantity) > (PERCENTILE_CONT(0.25) within group (Order by A.Quantity) over (Partition by A.Product)) and A.Quantity < 
+	 (PERCENTILE_CONT(0.50) within group (Order by A.Quantity) over (Partition by A.Product))) Then 'Medium'
+	 Else 'High'
+	 End as [Unit Category]
+From ProductCategory PC
+Join Apple A 
+on PC.Product = A.Product
+Group by PC.Category,
+A.Product,
+A.Quantity
+
+-- Customer Name by Revenue
+
+Select CustomerName
+,Sum(TotalPrice) as [TotalSpending]
+,Count(*) as [Purchase Frequency]
+,(Sum(TotalPrice)/Count(*)) as [Per Unit Spending]
+From Apple 
+Group by CustomerName 
+Order by 2 desc
+
+-- Adding columns
+
+Alter Table Apple
+Add Category nvarchar(50)
+
+Update Apple
+Set Category =
+CASE
+WHEN Product IN ('iPhone 12 Pro', 'iPhone 13') THEN 'Smartphone'
+WHEN Product IN ('MacBook Air', 'MacBook Pro') THEN 'Laptop'
+WHEN Product IN ('Apple Watch Series 7', 'Apple Watch SE') THEN 'Smartwatch'
+WHEN Product IN ('iPad Pro', 'iPad Air') THEN 'Tablet'
+WHEN Product IN ('AirPods Pro', 'AirPods 3') THEN 'Audio Accessories'
+WHEN Product IN ('iMac', 'iMac Pro') THEN 'Desktop Computer'
+WHEN Product IN ('Apple Pencil', 'Apple Pencil 2') THEN 'Accessories'
+WHEN Product IN ('HomePod Mini', 'HomePod') THEN 'Smart Speaker'
+WHEN Product IN ('Apple TV 4K', 'Apple TV HD') THEN 'Media Streaming'
+ELSE 'Other'
+END
+FROM Apple;
+
+-- Most Profitable Category
+Select Category
+,Sum(TotalPrice) as [Revenue]
+,Concat(Replicate('|',Round(Sum(TotalPrice)/(Select Sum(TotalPrice) From Apple) * 100,2)),' ',
+Concat(Round(Sum(TotalPrice)/(Select Sum(TotalPrice) From Apple) * 100,2),'%')) as [Revenue Share]
+From Apple
+Group by Category
+Order by 1 asc
+
+-- Preferences of products in context of age distribution
+
+SELECT
+    AgeGroup,
+    [1] AS Rank1_Category,
+    [2] AS Rank2_Category,
+    [3] AS Rank3_Category,
+    [4] AS Rank4_Category
+	from(
+Select Case 
+      when CustomerAge between 20 and 25 then '20-25'
+	  when CustomerAge between 25 and 30 then '25-30'
+	  when CustomerAge between 30 and 35 then '30-35'
+	  when CustomerAge between 35 and 40 then '35-40'
+	  else '40+'
+  end as AgeGroup
+ , category
+ , DENSE_RANK() over (Partition by Case when CustomerAge between 20 and 25 then '20-25' when CustomerAge between 25 and 30 then '25-30' when CustomerAge between 30 and 35 then '30-35' when CustomerAge between 35 and 40 then '35-40' else '40+'
+  end order by Sum(TotalPrice)) AS CategoryRank
+From Apple
+group by Case 
+      when CustomerAge between 20 and 25 then '20-25'
+	  when CustomerAge between 25 and 30 then '25-30'
+	  when CustomerAge between 30 and 35 then '30-35'
+	  when CustomerAge between 35 and 40 then '35-40'
+	  else '40+'
+  end, category) as Source
+  pivot ( max(category)
+          for CategoryRank in ([1],[2],[3],[4])) as PivotTable
+
+-- DaysSinceLastPurchase
+SELECT CustomerName,
+Date,
+Isnull(DATEDIFF(day, LAG(Date) OVER (PARTITION BY CustomerName ORDER BY Date), Date),0) AS DaysSinceLastPurchase
+FROM Apple
+GROUP BY CustomerName, Date;
